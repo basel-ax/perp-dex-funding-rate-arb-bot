@@ -13,6 +13,9 @@ type Config struct {
 	LighterAPIKey      string   `mapstructure:"LIGHTER_API_KEY"`
 	LighterPrivateKey  string   `mapstructure:"LIGHTER_PRIVATE_KEY"`
 	ExtendedAPIKey     string   `mapstructure:"EXTENDED_API_KEY"`
+	ExtendedPrivateKey string   `mapstructure:"EXTENDED_PRIVATE_KEY"`
+	ExtendedPublicKey  string   `mapstructure:"EXTENDED_PUBLIC_KEY"`
+	ExtendedVaultID    int      `mapstructure:"EXTENDED_VAULT_ID"`
 	Testnet            bool     `mapstructure:"TESTNET"`
 	Markets            []string `mapstructure:"MARKETS"`
 	MinFundingRateDiff float64  `mapstructure:"MIN_FUNDING_RATE_DIFF"`
@@ -24,9 +27,7 @@ type Config struct {
 
 // LoadConfig reads configuration from file or environment variables.
 func LoadConfig(path string) (config Config, err error) {
-	viper.AddConfigPath(path)
-	viper.SetConfigName("example")
-	viper.SetConfigType("env")
+	viper.SetConfigFile(path + "/.env")
 
 	viper.AutomaticEnv()
 

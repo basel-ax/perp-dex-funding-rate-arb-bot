@@ -1,8 +1,10 @@
 module github.com/basel-ax/perp-dex-funding-rate-arb-bot
 
-go 1.18
+go 1.24.0
 
 require (
+	github.com/extended-protocol/extended-sdk-golang v0.0.0-20250912114742-53aed8768baf
+	github.com/shopspring/decimal v1.4.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	gopkg.in/telebot.v3 v3.2.1

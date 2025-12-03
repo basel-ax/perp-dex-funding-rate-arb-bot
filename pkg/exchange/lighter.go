@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 const (
@@ -83,19 +84,22 @@ func (l *Lighter) GetOrderbook(market string) (map[string]interface{}, error) {
 }
 
 func (l *Lighter) PlaceOrder(market string, side OrderSide, orderType OrderType, amount, price float64) (*Order, error) {
-	// This requires a signed transaction using the SignerClient which is not fully documented for a Go implementation.
-	// This is a placeholder for where the order placement logic would go.
-	// We will simulate a successful order placement.
-	fmt.Printf("Simulating placing order on Lighter: %s %s %f @ %f\n", side, market, amount, price)
+	// NOTE: This function is a SIMULATION.
+	// The Lighter exchange API requires a complex signed transaction that is not fully
+	// documented for a non-Python implementation. This function logs the intent to trade
+	// but does not send a real order to the Lighter exchange.
+	fmt.Printf("\n==> [SIMULATED] Lighter Request:\n    Action: Place %s %s order\n    Market: %s\n    Amount: %f\n", orderType, side, market, amount)
+	fmt.Printf("<== [SIMULATED] Lighter Response: OK (No real order was sent)\n")
+
 	return &Order{
-		ID:        "lighter-simulated-order-id",
+		ID:        fmt.Sprintf("lighter-simulated-%d", time.Now().UnixNano()),
 		Market:    market,
 		Side:      side,
 		Type:      orderType,
 		Price:     price,
 		Amount:    amount,
 		Status:    "NEW",
-		Timestamp: 0, // Should be actual timestamp
+		Timestamp: time.Now().Unix(),
 	}, nil
 }
 

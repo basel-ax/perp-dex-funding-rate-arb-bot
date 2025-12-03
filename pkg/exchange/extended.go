@@ -2,12 +2,17 @@ package exchange
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
+
+	sdk "github.com/extended-protocol/extended-sdk-golang/src"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -17,23 +22,46 @@ const (
 
 // Extended is the implementation for the Extended exchange
 type Extended struct {
-	client  *http.Client
-	apiKey  string
-	baseURL string
-	testnet bool
+	client     *sdk.APIClient
+	account    *sdk.StarkPerpetualAccount
+	httpClient *http.Client // for requests not in the SDK
+	apiKey     string
+	baseURL    string
+	testnet    bool
 }
 
 // NewExtended creates a new Extended exchange client
-func NewExtended(apiKey string, testnet bool) *Extended {
+func NewExtended(apiKey, privateKey, publicKey string, vaultID int, testnet bool) *Extended {
 	baseURL := ExtendedMainnetBaseURL
 	if testnet {
 		baseURL = ExtendedTestnetBaseURL
 	}
+
+	cfg := sdk.EndpointConfig{
+		APIBaseURL: baseURL + "/api/v1",
+	}
+
+	account, err := sdk.NewStarkPerpetualAccount(
+		uint64(vaultID),
+		privateKey,
+		publicKey,
+		apiKey,
+	)
+	if err != nil {
+		// Using log.Fatal here because returning an error would require changing the function signature
+		// across multiple files, which is a larger refactor. For this bot, exiting is acceptable.
+		log.Fatalf("Failed to create extended sdk account: %v", err)
+	}
+
+	client := sdk.NewAPIClient(cfg, account.APIKey(), account, 30*time.Second)
+
 	return &Extended{
-		client:  &http.Client{Timeout: 10 * time.Second},
-		apiKey:  apiKey,
-		baseURL: baseURL,
-		testnet: testnet,
+		client:     client,
+		account:    account,
+		httpClient: &http.Client{Timeout: 10 * time.Second},
+		apiKey:     apiKey,
+		baseURL:    baseURL,
+		testnet:    testnet,
 	}
 }
 
@@ -52,47 +80,16 @@ func (e *Extended) SetTestnet(testnet bool) {
 	}
 }
 
-// ExtendedMarketStats represents the statistics for a market on Extended
-type ExtendedMarketStats struct {
-	FundingRate string `json:"fundingRate"`
-}
-
-// ExtendedMarket represents a single market on Extended
-type ExtendedMarket struct {
-	Name        string              `json:"name"`
-	MarketStats ExtendedMarketStats `json:"marketStats"`
-}
-
-// ExtendedMarketsResponse is the response structure for the markets endpoint
-type ExtendedMarketsResponse struct {
-	Status string           `json:"status"`
-	Data   []ExtendedMarket `json:"data"`
-}
-
 // GetFundingRates fetches funding rates for all markets
 func (e *Extended) GetFundingRates() ([]*FundingRate, error) {
-	endpoint := "/api/v1/info/markets"
-	body, err := e.sendRequest("GET", endpoint, nil)
+	markets, err := e.client.GetMarkets(context.Background(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get markets from Extended: %w", err)
-	}
-
-	var response ExtendedMarketsResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal markets response from Extended: %w", err)
-	}
-
-	if response.Status != "ok" {
-		return nil, fmt.Errorf("Extended API returned non-ok status: %s", string(body))
+		return nil, fmt.Errorf("failed to get markets from Extended SDK: %w", err)
 	}
 
 	var fundingRates []*FundingRate
-	for _, market := range response.Data {
-		rate, err := strconv.ParseFloat(market.MarketStats.FundingRate, 64)
-		if err != nil {
-			// Skip markets where funding rate is not a valid float
-			continue
-		}
+	for _, market := range markets {
+		rate, _ := market.MarketStats.FundingRate.Float64()
 		fundingRates = append(fundingRates, &FundingRate{
 			Market: market.Name,
 			Rate:   rate,
@@ -108,22 +105,136 @@ func (e *Extended) GetOrderbook(market string) (map[string]interface{}, error) {
 	return nil, fmt.Errorf("GetOrderbook not implemented for Extended")
 }
 
-// PlaceOrder simulates placing an order on Extended
-func (e *Extended) PlaceOrder(market string, side OrderSide, orderType OrderType, amount, price float64) (*Order, error) {
-	// Placing an order on Extended requires a complex signed message (Starknet signature).
-	// This is a placeholder to simulate the action.
-	// A real implementation would require a Starknet signing library.
-	fmt.Printf("Simulating placing order on Extended: %s %s %f @ %f\n", side, market, amount, price)
+// ExtendedMarketStatsResponse is the response structure for market stats
+type ExtendedMarketStatsResponse struct {
+	Status string `json:"status"`
+	Data   struct {
+		MarkPrice string `json:"markPrice"`
+	} `json:"data"`
+}
 
-	// Return a simulated order confirmation
+// GetMarkPrice fetches the current mark price for a given market.
+func (e *Extended) GetMarkPrice(market string) (float64, error) {
+	endpoint := fmt.Sprintf("/api/v1/info/markets/%s/stats", market)
+	body, err := e.sendRequest("GET", endpoint, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get market stats from Extended: %w", err)
+	}
+
+	var response ExtendedMarketStatsResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal market stats response from Extended: %w", err)
+	}
+	if response.Status != "OK" {
+		return 0, fmt.Errorf("Extended API returned non-OK status for market stats: %s", string(body))
+	}
+
+	markPrice, err := strconv.ParseFloat(response.Data.MarkPrice, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse mark price float from Extended: %w", err)
+	}
+
+	return markPrice, nil
+}
+
+func (e *Extended) getStarknetDomain() sdk.StarknetDomain {
+	if e.testnet {
+		return sdk.StarknetDomain{
+			Name:     "Perpetuals",
+			Version:  "v0",
+			ChainID:  "SN_SEPOLIA",
+			Revision: "1",
+		}
+	}
+	return sdk.StarknetDomain{
+		Name:     "Perpetuals",
+		Version:  "v0",
+		ChainID:  "SN_MAIN",
+		Revision: "1",
+	}
+}
+
+// PlaceOrder sends a real, signed order to the Extended exchange using the SDK.
+func (e *Extended) PlaceOrder(market string, side OrderSide, orderType OrderType, amount, price float64) (*Order, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	// 1. Get market details from the exchange
+	markets, err := e.client.GetMarkets(ctx, []string{market})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get market details for %s: %w", market, err)
+	}
+	if len(markets) == 0 {
+		return nil, fmt.Errorf("market %s not found on Extended", market)
+	}
+	marketInfo := markets[0]
+
+	// 2. Prepare order parameters
+	orderSide := sdk.OrderSideBuy
+	if side == Sell {
+		orderSide = sdk.OrderSideSell
+	}
+
+	nonce := int(time.Now().Unix())
+	params := sdk.CreateOrderObjectParams{
+		Market:                   marketInfo,
+		Account:                  *e.account,
+		SyntheticAmount:          decimal.NewFromFloat(amount),
+		Side:                     orderSide,
+		Signer:                   e.account.Sign,
+		StarknetDomain:           e.getStarknetDomain(),
+		SelfTradeProtectionLevel: sdk.SelfTradeProtectionAccount,
+		Nonce:                    &nonce,
+	}
+
+	if orderType == Market {
+		params.TimeInForce = sdk.TimeInForceIOC
+		// For market orders, the price field is still required for slippage protection.
+		// We'll calculate a price with a 5% buffer.
+		markPrice, err := e.GetMarkPrice(market)
+		if err != nil {
+			return nil, fmt.Errorf("could not get mark price for market order: %w", err)
+		}
+		var orderPrice float64
+		if side == Buy {
+			orderPrice = markPrice * 1.05
+		} else {
+			orderPrice = markPrice * 0.95
+		}
+		params.Price = decimal.NewFromFloat(orderPrice)
+	} else {
+		params.TimeInForce = sdk.TimeInForceGTT
+		params.Price = decimal.NewFromFloat(price)
+	}
+
+	// 3. Create and sign the order object
+	fmt.Printf("\n==> Creating and signing Extended order for %s...\n", market)
+	order, err := sdk.CreateOrderObject(params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SDK order object: %w", err)
+	}
+	orderJSON, _ := json.Marshal(order)
+	fmt.Printf("    Signed Order Payload: %s\n", string(orderJSON))
+
+	// 4. Submit the order
+	fmt.Println("    Submitting order to Extended API...")
+	response, err := e.client.SubmitOrder(ctx, order)
+	if err != nil {
+		fmt.Printf("<== Extended Raw Error Response: %v\n", err)
+		return nil, fmt.Errorf("failed to submit order via SDK: %w", err)
+	}
+	respJSON, _ := json.Marshal(response)
+	fmt.Printf("<== Extended Raw Success Response: %s\n", string(respJSON))
+
+	// 5. Return a standardized Order object
 	return &Order{
-		ID:        fmt.Sprintf("extended-simulated-%d", time.Now().UnixNano()),
+		ID:        strconv.FormatInt(int64(response.Data.OrderID), 10),
 		Market:    market,
 		Side:      side,
 		Type:      orderType,
 		Price:     price,
 		Amount:    amount,
-		Status:    "NEW",
+		Status:    "NEW", // The SDK response doesn't include status, assuming NEW.
 		Timestamp: time.Now().Unix(),
 	}, nil
 }
@@ -186,7 +297,7 @@ func (e *Extended) sendRequest(method, endpoint string, data []byte) ([]byte, er
 	req.Header.Set("X-Api-Key", e.apiKey)
 	req.Header.Set("User-Agent", "FundingRateArbBot/1.0")
 
-	resp, err := e.client.Do(req)
+	resp, err := e.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +322,6 @@ func (e *Extended) ClosePosition(market string, side OrderSide, amount float64) 
 		closeSide = Buy
 	}
 
-	fmt.Printf("Simulating closing %s position on Extended for %s\n", side, market)
 	// Using a market order to close, so price is irrelevant (can be 0).
 	return e.PlaceOrder(market, closeSide, Market, amount, 0)
 }

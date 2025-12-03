@@ -14,6 +14,8 @@ import (
 	"github.com/basel-ax/perp-dex-funding-rate-arb-bot/pkg/strategy"
 )
 
+var configPath string
+
 // TradeCmd represents the trade command
 var TradeCmd = &cobra.Command{
 	Use:   "trade",
@@ -23,7 +25,7 @@ It connects to the configured exchanges, fetches funding rates,
 and executes trades when an arbitrage opportunity is identified based on the provided configuration.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration
-		cfg, err := config.LoadConfig(".")
+		cfg, err := config.LoadConfig(configPath)
 		if err != nil {
 			log.Fatalf("cannot load config: %v", err)
 		}
@@ -35,7 +37,7 @@ and executes trades when an arbitrage opportunity is identified based on the pro
 		logger.Printf("Initializing exchanges in %s mode...", map[bool]string{true: "Testnet", false: "Mainnet"}[cfg.Testnet])
 
 		lighterEx := exchange.NewLighter(cfg.LighterAPIKey, cfg.LighterPrivateKey, cfg.Testnet)
-		extendedEx := exchange.NewExtended(cfg.ExtendedAPIKey, cfg.Testnet)
+		extendedEx := exchange.NewExtended(cfg.ExtendedAPIKey, cfg.ExtendedPrivateKey, cfg.ExtendedPublicKey, cfg.ExtendedVaultID, cfg.Testnet)
 
 		// Initialize Telegram notifier
 		notifier := notifications.NewTelegramNotifier(cfg.TelegramBotToken, cfg.TelegramChatID, logger)
@@ -66,6 +68,5 @@ and executes trades when an arbitrage opportunity is identified based on the pro
 }
 
 func init() {
-	// Flags for the trade command can be added here.
-	// For now, we are relying on the config file loaded from the execution path.
+	TradeCmd.Flags().StringVar(&configPath, "path", ".", "Path to the directory containing the .env file")
 }

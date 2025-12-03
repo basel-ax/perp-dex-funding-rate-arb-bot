@@ -21,6 +21,12 @@ The initial implementation includes connectors for **Lighter** and **Extended** 
 
 -   Go (version 1.18 or higher)
 -   Git
+-   **For Extended Exchange Trading:** The `extended-sdk-golang` requires a pre-compiled Rust library (`liborderffi.so`) to handle cryptographic signing.
+    -   This bot is intended to run on a Linux (`x86_64`) environment.
+    -   Before running the bot or tests, you may need to tell the system where to find this library by setting an environment variable:
+        ```sh
+        export LD_LIBRARY_PATH="$(pwd):${LD_LIBRARY_PATH:-}"
+        ```
 
 ### Installation
 
@@ -45,7 +51,7 @@ Before running the bot, you need to set up your configuration.
     ```sh
     cp example.env .env
     ```
-    **Note:** It's recommended to use a different name like `my_config.env` and use the `--config` flag if you want to avoid committing your keys by accident. The application loads `example.env` by default.
+    **Note:** The application looks for a file named `.env`. If you are running the `trade` command from a directory other than the project root, you must specify the path to the project root using the `--path` flag.
 
 2.  **Edit the configuration file:**
     Open your new `.env` file and fill in the required values:
@@ -53,6 +59,9 @@ Before running the bot, you need to set up your configuration.
     -   `LIGHTER_API_KEY`: Your API key for the Lighter exchange.
     -   `LIGHTER_PRIVATE_KEY`: Your API private key for the Lighter exchange.
     -   `EXTENDED_API_KEY`: Your API key for the Extended exchange.
+    -   `EXTENDED_PRIVATE_KEY`: Your Starknet private key for the Extended exchange account (in hex format).
+    -   `EXTENDED_PUBLIC_KEY`: Your Starknet public key for the Extended exchange account (in hex format).
+    -   `EXTENDED_VAULT_ID`: Your vault ID for the Extended exchange account.
     -   `TESTNET`: Set to `true` for testnet or `false` for mainnet. **Default is `true`**.
     -   `MARKETS`: A comma-separated list of markets to monitor (e.g., `BTC-USD,ETH-USD`).
     -   `MIN_FUNDING_RATE_DIFF`: The minimum percentage difference in funding rates to trigger a trade (e.g., `0.0001` for 0.01%).
@@ -75,12 +84,20 @@ go build .
 To start the trading bot, run the `trade` command:
 
 ```sh
+# Run from the project root
 go run main.go trade
+
+# Or specify the path to your config directory
+go run main.go trade --path /path/to/your/project/root
 ```
 
 Or, if you have built the executable:
 ```sh
+# Run from the project root
 ./perp-dex-funding-rate-arb-bot trade
+
+# Or specify the path to your config directory
+./perp-dex-funding-rate-arb-bot trade --path /path/to/your/project/root
 ```
 
 The bot will start, load the configuration, and begin monitoring the funding rates on the specified markets. It will print log messages to the console.
@@ -92,7 +109,7 @@ To stop the bot, press `Ctrl+C`. The bot will perform a graceful shutdown.
 The project includes an integration test that simulates the full arbitrage cycle: opening and closing positions on both exchanges in testnet mode.
 
 **Prerequisites for testing:**
-- Ensure you have a `example.env` file (or a copy) correctly configured with your **testnet** API keys.
+- Ensure you have a `.env` file in the project root, correctly configured with your **testnet** API keys.
 - `TESTNET` must be set to `true` in your `.env` file.
 
 To run the tests, use the following command:

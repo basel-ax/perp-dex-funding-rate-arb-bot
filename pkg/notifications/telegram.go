@@ -73,7 +73,7 @@ func (tn *TelegramNotifier) SendMessage(message string) {
 }
 
 // SendPositionNotification sends a formatted message about a trading event.
-func (tn *TelegramNotifier) SendPositionNotification(action, exchangeName, market string, balance float64, err error) {
+func (tn *TelegramNotifier) SendPositionNotification(action, exchangeName, market string, positionSizeUSD float64, err error) {
 	if tn == nil {
 		return
 	}
@@ -88,8 +88,8 @@ func (tn *TelegramNotifier) SendPositionNotification(action, exchangeName, marke
 			"**Status:** %s\n"+
 			"**Exchange:** `%s`\n"+
 			"**Market:** `%s`\n"+
-			"**Post-Action Balance:** `%.2f USD`",
-		action, status, exchangeName, market, balance,
+			"**Position Size:** `%.2f USD`",
+		action, status, exchangeName, market, positionSizeUSD,
 	)
 
 	if err != nil {

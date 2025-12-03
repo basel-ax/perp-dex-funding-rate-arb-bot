@@ -177,11 +177,7 @@ func (s *Strategy) executeArbitrage(market string, longEx, shortEx exchange.Exch
 	// Place orders
 	s.logger.Printf("Placing LONG order on %s for %f of %s at price %.2f", longEx.Name(), amount, market, currentPrice)
 	longOrder, err := longEx.PlaceOrder(market, exchange.Buy, exchange.Market, amount, currentPrice)
-	longBalance, balanceErr := longEx.GetBalance("USD")
-	if balanceErr != nil {
-		s.logger.Printf("Could not fetch balance from %s: %v", longEx.Name(), balanceErr)
-	}
-	s.notifier.SendPositionNotification("OPEN LONG", longEx.Name(), market, longBalance, err)
+	s.notifier.SendPositionNotification("OPEN LONG", longEx.Name(), market, s.config.PositionSizeUSD, err)
 	if err != nil {
 		s.logger.Printf("Failed to place LONG order on %s: %v", longEx.Name(), err)
 		return // Don't proceed to short if long fails
@@ -190,11 +186,7 @@ func (s *Strategy) executeArbitrage(market string, longEx, shortEx exchange.Exch
 
 	s.logger.Printf("Placing SHORT order on %s for %f of %s at price %.2f", shortEx.Name(), amount, market, currentPrice)
 	shortOrder, err := shortEx.PlaceOrder(market, exchange.Sell, exchange.Market, amount, currentPrice)
-	shortBalance, balanceErr := shortEx.GetBalance("USD")
-	if balanceErr != nil {
-		s.logger.Printf("Could not fetch balance from %s: %v", shortEx.Name(), balanceErr)
-	}
-	s.notifier.SendPositionNotification("OPEN SHORT", shortEx.Name(), market, shortBalance, err)
+	s.notifier.SendPositionNotification("OPEN SHORT", shortEx.Name(), market, s.config.PositionSizeUSD, err)
 	if err != nil {
 		s.logger.Printf("Failed to place SHORT order on %s: %v", shortEx.Name(), err)
 		// TODO: Need to handle the case where the long order was placed but the short failed.
@@ -252,11 +244,7 @@ func (s *Strategy) closeArbitrage(position *PositionInfo) {
 
 	// Close positions
 	_, longCloseErr := position.LongExchange.ClosePosition(position.Market, exchange.Buy, amount)
-	longBalance, balanceErr := position.LongExchange.GetBalance("USD")
-	if balanceErr != nil {
-		s.logger.Printf("Could not fetch balance from %s: %v", position.LongExchange.Name(), balanceErr)
-	}
-	s.notifier.SendPositionNotification("CLOSE LONG", position.LongExchange.Name(), position.Market, longBalance, longCloseErr)
+	s.notifier.SendPositionNotification("CLOSE LONG", position.LongExchange.Name(), position.Market, position.SizeUSD, longCloseErr)
 	if longCloseErr != nil {
 		s.logger.Printf("Failed to close LONG position on %s: %v", position.LongExchange.Name(), longCloseErr)
 	} else {
@@ -264,11 +252,7 @@ func (s *Strategy) closeArbitrage(position *PositionInfo) {
 	}
 
 	_, shortCloseErr := position.ShortExchange.ClosePosition(position.Market, exchange.Sell, amount)
-	shortBalance, balanceErr := position.ShortExchange.GetBalance("USD")
-	if balanceErr != nil {
-		s.logger.Printf("Could not fetch balance from %s: %v", position.ShortExchange.Name(), balanceErr)
-	}
-	s.notifier.SendPositionNotification("CLOSE SHORT", position.ShortExchange.Name(), position.Market, shortBalance, shortCloseErr)
+	s.notifier.SendPositionNotification("CLOSE SHORT", position.ShortExchange.Name(), position.Market, position.SizeUSD, shortCloseErr)
 	if shortCloseErr != nil {
 		s.logger.Printf("Failed to close SHORT position on %s: %v", position.ShortExchange.Name(), shortCloseErr)
 	} else {
