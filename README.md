@@ -58,6 +58,8 @@ Before running the bot, you need to set up your configuration.
     -   `MIN_FUNDING_RATE_DIFF`: The minimum percentage difference in funding rates to trigger a trade (e.g., `0.0001` for 0.01%).
     -   `POSITION_SIZE_USD`: The value of each arbitrage position in USD.
     -   `MAX_POSITION_USD`: The maximum total value of all open positions in USD.
+    -   `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from BotFather.
+    -   `TELEGRAM_CHAT_ID`: The ID of the Telegram chat where you want to receive notifications.
 
 ## Usage
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/basel-ax/perp-dex-funding-rate-arb-bot/config"
 	"github.com/basel-ax/perp-dex-funding-rate-arb-bot/pkg/exchange"
+	"github.com/basel-ax/perp-dex-funding-rate-arb-bot/pkg/notifications"
 )
 
 // TestArbitrageExecution is an integration test that opens and closes positions.
@@ -31,6 +32,10 @@ func TestArbitrageExecution(t *testing.T) {
 	lighterEx := exchange.NewLighter(cfg.LighterAPIKey, cfg.LighterPrivateKey, true)
 	extendedEx := exchange.NewExtended(cfg.ExtendedAPIKey, true)
 
+	notifier := notifications.NewTelegramNotifier(cfg.TelegramBotToken, cfg.TelegramChatID, logger)
+	notifier.Start()
+	defer notifier.Stop()
+
 	// --- Test Parameters ---
 	market := "BTC-USD"         // Using a common market for the test
 	positionSizeUSD := 10.0     // Use a very small, fixed size for testing
@@ -43,12 +48,22 @@ func TestArbitrageExecution(t *testing.T) {
 	// Open positions
 	logger.Println("Placing orders to open positions...")
 	shortOrder, err := lighterEx.PlaceOrder(market, exchange.Sell, exchange.Market, amount, 0) // price 0 for market order
+	shortBalance, balanceErr := lighterEx.GetBalance("USD")
+	if balanceErr != nil {
+		logger.Printf("Could not fetch balance from Lighter: %v", balanceErr)
+	}
+	notifier.SendPositionNotification("TEST OPEN SHORT", lighterEx.Name(), market, shortBalance, err)
 	if err != nil {
 		t.Fatalf("Scenario 1: Failed to place SHORT order on Lighter: %v", err)
 	}
 	logger.Printf("Scenario 1: Placed SHORT order on Lighter: ID %s", shortOrder.ID)
 
 	longOrder, err := extendedEx.PlaceOrder(market, exchange.Buy, exchange.Market, amount, 0)
+	longBalance, balanceErr := extendedEx.GetBalance("USD")
+	if balanceErr != nil {
+		logger.Printf("Could not fetch balance from Extended: %v", balanceErr)
+	}
+	notifier.SendPositionNotification("TEST OPEN LONG", extendedEx.Name(), market, longBalance, err)
 	if err != nil {
 		// If the second leg fails, we should try to close the first one to avoid an open position.
 		logger.Printf("Scenario 1: Failed to place LONG order on Extended, attempting to reverse position on Lighter...")
@@ -66,6 +81,11 @@ func TestArbitrageExecution(t *testing.T) {
 	// Close positions
 	logger.Println("Scenario 1: Closing positions...")
 	closeShort, err := lighterEx.ClosePosition(market, exchange.Sell, amount)
+	shortBalance, balanceErr = lighterEx.GetBalance("USD")
+	if balanceErr != nil {
+		logger.Printf("Could not fetch balance from Lighter: %v", balanceErr)
+	}
+	notifier.SendPositionNotification("TEST CLOSE SHORT", lighterEx.Name(), market, shortBalance, err)
 	if err != nil {
 		t.Errorf("Scenario 1: Failed to close position on Lighter: %v", err)
 	} else {
@@ -73,6 +93,11 @@ func TestArbitrageExecution(t *testing.T) {
 	}
 
 	closeLong, err := extendedEx.ClosePosition(market, exchange.Buy, amount)
+	longBalance, balanceErr = extendedEx.GetBalance("USD")
+	if balanceErr != nil {
+		logger.Printf("Could not fetch balance from Extended: %v", balanceErr)
+	}
+	notifier.SendPositionNotification("TEST CLOSE LONG", extendedEx.Name(), market, longBalance, err)
 	if err != nil {
 		t.Errorf("Scenario 1: Failed to close position on Extended: %v", err)
 	} else {
@@ -90,12 +115,22 @@ func TestArbitrageExecution(t *testing.T) {
 	// Open positions
 	logger.Println("Placing orders to open positions...")
 	longOrder2, err := lighterEx.PlaceOrder(market, exchange.Buy, exchange.Market, amount, 0)
+	longBalance, balanceErr = lighterEx.GetBalance("USD")
+	if balanceErr != nil {
+		logger.Printf("Could not fetch balance from Lighter: %v", balanceErr)
+	}
+	notifier.SendPositionNotification("TEST OPEN LONG", lighterEx.Name(), market, longBalance, err)
 	if err != nil {
 		t.Fatalf("Scenario 2: Failed to place LONG order on Lighter: %v", err)
 	}
 	logger.Printf("Scenario 2: Placed LONG order on Lighter: ID %s", longOrder2.ID)
 
 	shortOrder2, err := extendedEx.PlaceOrder(market, exchange.Sell, exchange.Market, amount, 0)
+	shortBalance, balanceErr = extendedEx.GetBalance("USD")
+	if balanceErr != nil {
+		logger.Printf("Could not fetch balance from Extended: %v", balanceErr)
+	}
+	notifier.SendPositionNotification("TEST OPEN SHORT", extendedEx.Name(), market, shortBalance, err)
 	if err != nil {
 		// Attempt to close the first leg if the second fails
 		logger.Printf("Scenario 2: Failed to place SHORT order on Extended, attempting to reverse position on Lighter...")
@@ -113,6 +148,11 @@ func TestArbitrageExecution(t *testing.T) {
 	// Close positions
 	logger.Println("Scenario 2: Closing positions...")
 	closeLong2, err := lighterEx.ClosePosition(market, exchange.Buy, amount)
+	longBalance, balanceErr = lighterEx.GetBalance("USD")
+	if balanceErr != nil {
+		logger.Printf("Could not fetch balance from Lighter: %v", balanceErr)
+	}
+	notifier.SendPositionNotification("TEST CLOSE LONG", lighterEx.Name(), market, longBalance, err)
 	if err != nil {
 		t.Errorf("Scenario 2: Failed to close position on Lighter: %v", err)
 	} else {
@@ -120,6 +160,11 @@ func TestArbitrageExecution(t *testing.T) {
 	}
 
 	closeShort2, err := extendedEx.ClosePosition(market, exchange.Sell, amount)
+	shortBalance, balanceErr = extendedEx.GetBalance("USD")
+	if balanceErr != nil {
+		logger.Printf("Could not fetch balance from Extended: %v", balanceErr)
+	}
+	notifier.SendPositionNotification("TEST CLOSE SHORT", extendedEx.Name(), market, shortBalance, err)
 	if err != nil {
 		t.Errorf("Scenario 2: Failed to close position on Extended: %v", err)
 	} else {

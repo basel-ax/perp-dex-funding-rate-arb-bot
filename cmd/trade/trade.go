@@ -10,6 +10,7 @@ import (
 
 	"github.com/basel-ax/perp-dex-funding-rate-arb-bot/config"
 	"github.com/basel-ax/perp-dex-funding-rate-arb-bot/pkg/exchange"
+	"github.com/basel-ax/perp-dex-funding-rate-arb-bot/pkg/notifications"
 	"github.com/basel-ax/perp-dex-funding-rate-arb-bot/pkg/strategy"
 )
 
@@ -36,8 +37,11 @@ and executes trades when an arbitrage opportunity is identified based on the pro
 		lighterEx := exchange.NewLighter(cfg.LighterAPIKey, cfg.LighterPrivateKey, cfg.Testnet)
 		extendedEx := exchange.NewExtended(cfg.ExtendedAPIKey, cfg.Testnet)
 
+		// Initialize Telegram notifier
+		notifier := notifications.NewTelegramNotifier(cfg.TelegramBotToken, cfg.TelegramChatID, logger)
+
 		// Create the strategy
-		arbStrategy := strategy.NewFundingRateArb(cfg, lighterEx, extendedEx, logger)
+		arbStrategy := strategy.NewFundingRateArb(cfg, lighterEx, extendedEx, logger, notifier)
 
 		// Handle graceful shutdown
 		stop := make(chan struct{})
@@ -47,8 +51,12 @@ and executes trades when an arbitrage opportunity is identified based on the pro
 		go func() {
 			<-osSignal
 			logger.Println("Interrupt signal received. Shutting down gracefully...")
+			notifier.Stop()
 			close(stop)
 		}()
+
+		// Start the notifier's poller
+		notifier.Start()
 
 		// Run the strategy
 		arbStrategy.Run(stop)

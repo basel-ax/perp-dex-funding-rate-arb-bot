@@ -18,6 +18,8 @@ type Config struct {
 	MinFundingRateDiff float64  `mapstructure:"MIN_FUNDING_RATE_DIFF"`
 	PositionSizeUSD    float64  `mapstructure:"POSITION_SIZE_USD"`
 	MaxPositionUSD     float64  `mapstructure:"MAX_POSITION_USD"`
+	TelegramBotToken   string   `mapstructure:"TELEGRAM_BOT_TOKEN"`
+	TelegramChatID     int64    `mapstructure:"TELEGRAM_CHAT_ID"`
 }
 
 // LoadConfig reads configuration from file or environment variables.
